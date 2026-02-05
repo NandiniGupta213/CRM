@@ -28,19 +28,14 @@ dotenv.config({
 const app = express();
 
 app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      "https://fronetendcrm.onrender.com",
-      "http://localhost:5173"
-    ];
-
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
-    }
-  },
-  credentials: true
+  origin: [
+    "https://fronetendcrm.onrender.com",
+    "https://fronetendcrm.onrender.com/", // mobile browsers add slash
+    "http://localhost:5173"
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 
