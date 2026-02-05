@@ -3,17 +3,11 @@ import { asynchandler } from "../utils/asynchHandler.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
 
-
 export const verifyJWT = asynchandler(async (req, res, next) => {
   let token;
 
-
-
-  if (req.cookies?.accessToken) {
-    token = req.cookies.accessToken;
-  }
-
-  if (!token && req.headers.authorization?.startsWith("Bearer ")) {
+  // ✅ JWT ONLY — from Authorization header
+  if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.split(" ")[1];
   }
 
@@ -35,13 +29,12 @@ export const verifyJWT = asynchandler(async (req, res, next) => {
     next();
   } catch (error) {
     console.error("JWT VERIFY ERROR:", error.message);
-    throw new ApiError(401, error.message);
+    throw new ApiError(401, "Invalid or expired token");
   }
 });
 
 
 
-// Role-based middleware
 export const authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -49,14 +42,13 @@ export const authorize = (...roles) => {
     }
 
     if (!roles.includes(req.user.role)) {
-      throw new ApiError(403, "You do not have permission to access this resource");
+      throw new ApiError(403, "You do not have permission");
     }
 
     next();
   };
 };
 
-// Specific role middleware
 export const isAdmin = authorize(1);
 export const isProjectManager = authorize(2);
 export const isEmployee = authorize(3);
