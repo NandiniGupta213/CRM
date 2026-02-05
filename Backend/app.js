@@ -29,7 +29,8 @@ const app = express();
   app.use(cors({
     origin: ['https://fronetendcrm.onrender.com', 'http://localhost:5173'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false 
   }));
 
 
