@@ -245,8 +245,7 @@ const TaskCreateModal = ({
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`
-          },
-          withCredentials: true
+          }
         });
         
         console.log('✅ API Response:', response.data);
