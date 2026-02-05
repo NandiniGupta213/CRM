@@ -1,0 +1,28 @@
+import customShadows from '../../shadow'; // import your custom shadows
+
+const Drawer = {
+  styleOverrides: {
+    root: {
+      '&:hover, &:focus': {
+        '*::-webkit-scrollbar, *::-webkit-scrollbar-thumb': {
+          visibility: 'visible',
+        },
+      },
+    },
+    paper: ({ theme }) => ({
+      padding: 0,
+      width: '300px',
+      height: '100vh',
+      borderRadius: 0,
+      border: 0,
+      borderRight: 1,
+      borderStyle: 'solid',
+      borderColor: theme.palette.info.main,
+      backgroundColor: theme.palette.info.darker,
+      boxShadow: theme.customShadows ? theme.customShadows[0] : customShadows[0],
+      boxSizing: 'border-box',
+    }),
+  },
+};
+
+export default Drawer;
