@@ -29,7 +29,7 @@ const app = express();
 
 
   app.use(cors({
-    origin: ['https://fronetendcrm.onrender.com', 'http://localhost:5173'],
+    origin: ['https://fronetendcrm.onrender.com'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   }));
@@ -41,7 +41,7 @@ app.set("trust proxy", 1); // REQUIRED on Render
 
 app.use(session({
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     secret: process.env.SESSION_SECRET,
     cookie: {
       httpOnly: true,
