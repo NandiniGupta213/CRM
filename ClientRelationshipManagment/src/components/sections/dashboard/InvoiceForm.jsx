@@ -90,7 +90,7 @@ const InvoiceForm = () => {
     paymentTerms: 'Payment due within 30 days',
   });
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Fetch clients for dropdown
   const fetchClients = async () => {
