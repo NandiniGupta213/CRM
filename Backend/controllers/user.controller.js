@@ -90,17 +90,10 @@ const loginUser = asynchandler(async (req, res) => { // Remove "next" parameter
     "-password -refreshToken"
   );
 
-  // Set cookies
-  const options = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  };
+ 
   console.log("User login successfully")
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
     .json(
       new ApiResponse(
         200,
@@ -238,15 +231,9 @@ const logoutUser = asynchandler(async (req, res) => {
     }
   );
 
-  const options = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-  };
 
   return res
     .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
     .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 
