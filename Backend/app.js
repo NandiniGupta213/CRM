@@ -31,7 +31,6 @@ app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
       "https://fronetendcrm.onrender.com",
-      "https://fronetendcrm.onrender.com/",
       "http://localhost:5173"
     ];
 
