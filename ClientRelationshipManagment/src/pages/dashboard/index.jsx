@@ -145,29 +145,66 @@ const fetchDashboardData = async () => {
       'Content-Type': 'application/json'
     };
 
-    // Fetch all dashboard data in parallel
+    // Helper function to handle API calls with better error handling
+    const fetchWithAuth = async (url) => {
+      const response = await fetch(url, { headers });
+      
+      // Check if response is unauthorized
+      if (response.status === 401) {
+        // Try to refresh token first
+        const refreshSuccess = await refreshAccessToken();
+        if (refreshSuccess) {
+          // Retry with new token
+          const newToken = localStorage.getItem('accessToken');
+          const newHeaders = {
+            ...headers,
+            'Authorization': `Bearer ${newToken}`
+          };
+          const retryResponse = await fetch(url, { headers: newHeaders });
+          return retryResponse;
+        } else {
+          // Refresh failed, redirect to login
+          navigate('/login');
+          throw new Error('Session expired. Please login again.');
+        }
+      }
+      
+      // Check if response is not OK
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      return response;
+    };
+
+    // Fetch all dashboard data
     const [
       summaryResponse,
-      projectsHealthResponse, // Project health endpoint
+      projectsHealthResponse,
       financialResponse,
-      clientDataResponse
+      clientDataResponse,
+      notificationsResponse
     ] = await Promise.all([
-      fetch(`${API_BASE_URL}/admindashboard/summary`, { headers }),
-      fetch(`${API_BASE_URL}/admindashboard/projects/health`, { headers }),
-      fetch(`${API_BASE_URL}/admindashboard/financial`, { headers }),
-      fetch(`${API_BASE_URL}/admindashboard/clients-only`, { headers })
+      fetchWithAuth(`${API_BASE_URL}/admindashboard/summary`).catch(() => null),
+      fetchWithAuth(`${API_BASE_URL}/admindashboard/projects/health`).catch(() => null),
+      fetchWithAuth(`${API_BASE_URL}/admindashboard/financial`).catch(() => null),
+      fetchWithAuth(`${API_BASE_URL}/admindashboard/clients-only`).catch(() => null),
+      fetchWithAuth(`${API_BASE_URL}/admindashboard/notifications`).catch(() => null)
     ]);
 
-    // Process all responses
-    const summaryData = await summaryResponse.json();
-    const projectsHealthData = await projectsHealthResponse.json();
-    const financialData = await financialResponse.json();
-    const clientData = await clientDataResponse.json();
+    // Parse responses only if they exist
+    const [summaryData, projectsHealthData, financialData, clientData, notificationsData] = await Promise.all([
+      summaryResponse ? summaryResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
+      projectsHealthResponse ? projectsHealthResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
+      financialResponse ? financialResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
+      clientDataResponse ? clientDataResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
+      notificationsResponse ? notificationsResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null }
+    ]);
 
-    // Update state with all data
-    setDashboardData({
-      // Summary from summary endpoint
-      summary: {
+    // Update state with available data
+    setDashboardData(prev => ({
+      ...prev,
+      summary: summaryData.success ? {
         totalClients: summaryData.data?.totalClients || 0,
         activeProjects: summaryData.data?.activeProjects || 0,
         delayedProjects: summaryData.data?.delayedProjects || 0,
@@ -177,28 +214,33 @@ const fetchDashboardData = async () => {
         paidRevenue: summaryData.data?.paidRevenue || 0,
         totalTasks: summaryData.data?.totalTasks || 0,
         overdueTasks: summaryData.data?.overdueTasks || 0
-      },
+      } : prev.summary,
       
-      // Project health data for chart
-      projects: projectsHealthData.success ? projectsHealthData.data.projects : [],
+      projects: projectsHealthData.success ? projectsHealthData.data?.projects || [] : prev.projects,
       
-      // Financial data
-      financial: financialData.success ? financialData.data : {
-        totalInvoices: 0,
-        totalAmount: 0,
-        paidAmount: 0,
-        pendingAmount: 0,
-        overdueAmount: 0,
-        recentInvoices: []
-      },
+      financial: financialData.success ? financialData.data || prev.financial : prev.financial,
       
-      // Client data
-      clientData: clientData.success ? clientData.data : null
-    });
+      clientData: clientData.success ? clientData.data || prev.clientData : prev.clientData
+    }));
+
+    // Update notifications if available
+    if (notificationsData.success) {
+      setNotifications(notificationsData.data?.notifications || []);
+      setNotificationCount(notificationsData.data?.total || 0);
+    }
 
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
-    setError('Failed to load dashboard data. Please try again.');
+    
+    // Check if it's an authentication error
+    if (error.message.includes('Session expired') || error.message.includes('401')) {
+      setError('Your session has expired. Please login again.');
+      // Clear invalid token
+      localStorage.removeItem('accessToken');
+      navigate('/login');
+    } else {
+      setError('Failed to load some dashboard data. Some features may be limited.');
+    }
   } finally {
     setLoading(false);
   }
