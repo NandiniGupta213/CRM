@@ -27,38 +27,30 @@ dotenv.config({
 
 const app = express();
 
-app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      "https://fronetendcrm.onrender.com",
-      "http://localhost:5173"
-    ];
 
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
-    }
-  },
-  credentials: true
-}));
+  app.use(cors({
+    origin: ['https://fronetendcrm.onrender.com', 'http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  }));
+  
 
 
 
 app.set("trust proxy", 1); // REQUIRED on Render
 
 app.use(session({
-  name: "crm.sid",
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: true,        // HTTPS only (Render)
-    httpOnly: true,
-    sameSite: "none",    // REQUIRED for mobile + cross-site
-    maxAge: 24 * 60 * 60 * 1000
-  }
-}));
+    resave: false,
+    saveUninitialized: true,
+    secret: process.env.SESSION_SECRET,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'None',
+      maxAge: 3600000 
+    }
+  }));
+
 
 app.use(express.json({limit: "16kb"}));
 app.use(express.urlencoded({extended: true, limit: "16kb"}));
