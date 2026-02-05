@@ -28,7 +28,7 @@ dotenv.config({
 const app = express();
 
 app.use(cors({ 
-    origin: 'http://localhost:5173',
+    origin: 'https://fronetendcrm.onrender.com',
     credentials: true 
 }));
 
