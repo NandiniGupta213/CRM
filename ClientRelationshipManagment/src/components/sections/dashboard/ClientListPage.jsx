@@ -57,7 +57,7 @@ const ClientsPage = () => {
   });
 
   const itemsPerPage = 6;
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
 
 // Run this in your terminal or a test route

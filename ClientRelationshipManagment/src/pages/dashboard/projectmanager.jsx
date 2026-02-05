@@ -55,7 +55,7 @@ const [notificationModalOpen, setNotificationModalOpen] = useState(false);
 const [notificationLoading, setNotificationLoading] = useState(false);
   
   const navigate = useNavigate();
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   const fetchDashboardData = async () => {
     setLoading(true);

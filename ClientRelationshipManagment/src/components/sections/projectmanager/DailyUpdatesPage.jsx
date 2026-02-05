@@ -35,7 +35,7 @@ import {
   Send as SendIcon
 } from '@mui/icons-material';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
 const DailyUpdatesPage = () => {
   const [tasks, setTasks] = useState([]);

@@ -61,7 +61,7 @@ const ResetPassword = () => {
     setLoading(true);
     
     try {
-      const response = await fetch(`http://localhost:8000/user/reset-password/${token}`, {
+      const response = await fetch(`https://crm-rx6f.onrender.com/user/reset-password/${token}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

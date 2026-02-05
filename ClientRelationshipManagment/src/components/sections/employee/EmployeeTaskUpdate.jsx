@@ -52,7 +52,7 @@ const EmployeeTaskUpdate = ({ task, onUpdate }) => {
     try {
       // Call API to update status
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`http://localhost:8000/dailyupdate/${task._id}/status`, {
+      const response = await fetch(`https://crm-rx6f.onrender.com/dailyupdate/${task._id}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,

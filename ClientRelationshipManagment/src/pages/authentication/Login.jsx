@@ -129,7 +129,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/user/forgot-password', {
+      const response = await fetch('https://crm-rx6f.onrender.com/user/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

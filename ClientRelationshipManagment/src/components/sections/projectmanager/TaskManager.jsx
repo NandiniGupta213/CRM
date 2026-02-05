@@ -120,7 +120,7 @@ const TaskManager = () => {
   });
 
   const itemsPerPage = 10;
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Memoized helpers
   const getInitials = useCallback((name) => {

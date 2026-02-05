@@ -99,7 +99,7 @@ const EmployeeDashboard = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   
-  const API_BASE_URL = 'http://localhost:8000/employeedashboard';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com/employeedashboard';
 
   const fetchDashboardData = async () => {
   setLoading(true);

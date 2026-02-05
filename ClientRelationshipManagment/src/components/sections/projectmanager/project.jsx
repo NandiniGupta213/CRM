@@ -57,7 +57,7 @@ const PMDashboard = () => {
     totalTeamMembers: 0
   });
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Color palette for professional look
   const colors = {

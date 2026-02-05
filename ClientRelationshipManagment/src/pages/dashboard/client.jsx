@@ -52,7 +52,7 @@ const ClientDashboard = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
   const navigate = useNavigate();
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Fetch dashboard data
   const fetchDashboardData = async () => {

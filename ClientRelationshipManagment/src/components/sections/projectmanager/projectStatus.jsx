@@ -63,7 +63,7 @@ const ProjectStatus = () => {
     remarks: ''
   });
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Fetch projects assigned to this PM
   const fetchProjects = async () => {

@@ -76,7 +76,7 @@ const ClientInvoicesPage = () => {
   const [invoiceDetails, setInvoiceDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Fetch client invoices
   const fetchMyInvoices = async () => {

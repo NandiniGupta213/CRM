@@ -48,7 +48,7 @@ const ProjectsPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
   const itemsPerPage = 10;
 
   // Fetch projects

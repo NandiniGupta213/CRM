@@ -75,7 +75,7 @@ const ClientProjectsPage = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const API_BASE_URL = 'http://localhost:8000';
+  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
   // Fetch client's own projects
   const fetchMyProjects = async () => {
