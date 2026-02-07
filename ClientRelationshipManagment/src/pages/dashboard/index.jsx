@@ -687,70 +687,7 @@ return (
               Real-time overview of business performance and key metrics
             </Typography>
           </Box>
-          <Button
-  variant="contained"
-  color="error"
-  onClick={async () => {
-    console.log('🔍 DEBUG: Testing backend middleware');
-    
-    const token = localStorage.getItem('accessToken');
-    const user = JSON.parse(localStorage.getItem('user'));
-    
-    console.log('1. Local storage data:', {
-      token: token?.substring(0, 50) + '...',
-      user: user
-    });
-    
-    // Test 1: Call backend without auth
-    console.log('2. Testing WITHOUT auth:');
-    try {
-      const noAuth = await fetch(`${API_BASE_URL}/admindashboard/summary`);
-      const noAuthText = await noAuth.text();
-      console.log('   Status:', noAuth.status);
-      console.log('   Response:', noAuthText.substring(0, 200));
-    } catch (e) {
-      console.log('   Error:', e.message);
-    }
-    
-    // Test 2: Call backend WITH auth
-    console.log('3. Testing WITH auth:');
-    try {
-      const withAuth = await fetch(`${API_BASE_URL}/admindashboard/summary`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const withAuthText = await withAuth.text();
-      console.log('   Status:', withAuth.status);
-      console.log('   Content-Type:', withAuth.headers.get('content-type'));
-      console.log('   Response:', withAuthText.substring(0, 500));
-      
-      // Try to parse
-      try {
-        const json = JSON.parse(withAuthText);
-        console.log('   JSON:', json);
-      } catch {
-        console.log('   NOT JSON - is HTML');
-      }
-    } catch (e) {
-      console.log('   Error:', e.message);
-    }
-    
-    // Test 3: Test a different endpoint
-    console.log('4. Testing /user/profile:');
-    try {
-      const profile = await fetch(`${API_BASE_URL}/user/profile`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const profileText = await profile.text();
-      console.log('   Status:', profile.status);
-      console.log('   Response:', profileText.substring(0, 200));
-    } catch (e) {
-      console.log('   Error:', e.message);
-    }
-  }}
-  sx={{ ml: 1, mt: 1 }}
->
-  Debug Backend Middleware
-</Button>
+          
           
        <Stack direction="row" spacing={2} alignItems="center">
   {/* Notification Bell */}
