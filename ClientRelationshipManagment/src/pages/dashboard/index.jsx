@@ -134,11 +134,13 @@ const refreshAccessToken = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     
     if (!refreshToken) {
-      console.log('❌ No refresh token found');
+      console.log('❌ No refresh token found in localStorage');
       return false;
     }
     
-    // Send refresh token in request body (not cookies)
+    console.log('📤 Sending refresh token:', refreshToken.substring(0, 30) + '...');
+    
+    // Send refresh token in request body
     const response = await fetch(`${API_BASE_URL}/user/refresh-token`, {
       method: 'POST',
       headers: {
@@ -148,30 +150,38 @@ const refreshAccessToken = async () => {
       // NO credentials: 'include' since we're not using cookies
     });
     
-    console.log('Refresh response status:', response.status);
+    console.log('🔁 Refresh response status:', response.status);
     
     if (response.ok) {
       const data = await response.json();
       console.log('✅ Token refresh response:', data);
       
-      if (data.success && data.data?.accessToken) {
+      if (data.success && data.data?.accessToken && data.data?.refreshToken) {
         // Update both tokens in localStorage
         localStorage.setItem('accessToken', data.data.accessToken);
         localStorage.setItem('refreshToken', data.data.refreshToken);
         console.log('✅ Tokens updated in localStorage');
         return true;
+      } else {
+        console.log('❌ Invalid response format:', data);
+        return false;
       }
+    } else {
+      // Try to get error message
+      try {
+        const errorData = await response.json();
+        console.log('❌ Refresh failed with message:', errorData.message);
+      } catch (e) {
+        console.log('❌ Refresh failed with status:', response.status);
+      }
+      return false;
     }
-    
-    console.log('❌ Token refresh failed');
-    return false;
     
   } catch (error) {
     console.error('❌ Error refreshing token:', error);
     return false;
   }
 };
-
 // Helper function to safely parse JSON
 const safeJsonParse = async (response) => {
   try {
@@ -195,213 +205,133 @@ const fetchDashboardData = async () => {
   setError('');
   
   try {
-    const token = localStorage.getItem('accessToken');
+    console.log('🔄 Fetching dashboard data...');
     
-    if (!token) {
-      setError('Please login to view dashboard');
-      setLoading(false);
+    // 1. Get token
+    const token = localStorage.getItem('accessToken');
+    const user = localStorage.getItem('user');
+    
+    if (!token || !user) {
+      console.log('❌ No auth data');
       navigate('/authentication/login');
       return;
     }
-
+    
+    // 2. SIMPLE HEADERS - Most important fix
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
-
-   const fetchWithAuth = async (url, retryCount = 0) => {
-  const token = localStorage.getItem('accessToken');
-  
-  if (!token) {
-    throw new Error('No authentication token found');
-  }
-  
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
-  
-  const response = await fetch(url, { headers });
-  
-  // Handle 401 - Try to refresh token
-  if (response.status === 401) {
-    console.log('Token expired, attempting refresh...');
     
-    // Don't retry more than once
-    if (retryCount > 0) {
-      throw new Error('Session expired. Please login again.');
-    }
+    console.log('📤 Sending request with token:', token.substring(0, 50) + '...');
     
-    const refreshSuccess = await refreshAccessToken();
-    if (refreshSuccess) {
-      // Retry with new token
-      const newToken = localStorage.getItem('accessToken');
-      const newHeaders = {
-        ...headers,
-        'Authorization': `Bearer ${newToken}`
-      };
-      return fetch(url, { headers: newHeaders });
-    } else {
-      // Refresh failed, clear tokens and redirect
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      
-      setError('Your session has expired. Please login again.');
-      
-      setTimeout(() => {
-        navigate('/authentication/login');
-      }, 2000);
-      
-      throw new Error('Session expired. Please login again.');
-    }
-  }
-  
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-  
-  return response;
-};
-
-    // Fetch all dashboard data with timeout
-    const fetchWithTimeout = (url, timeout = 10000) => {
-      return Promise.race([
-        fetchWithAuth(url),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timeout')), timeout)
-        )
-      ]);
-    };
-
-    const [
-      summaryResponse,
-      projectsHealthResponse,
-      financialResponse,
-      clientDataResponse,
-      notificationsResponse
-    ] = await Promise.allSettled([
-      fetchWithTimeout(`${API_BASE_URL}/admindashboard/summary`),
-      fetchWithTimeout(`${API_BASE_URL}/admindashboard/projects/health`),
-      fetchWithTimeout(`${API_BASE_URL}/admindashboard/financial`),
-      fetchWithTimeout(`${API_BASE_URL}/admindashboard/clients-only`),
-      fetchWithTimeout(`${API_BASE_URL}/admindashboard/notifications`)
-    ]);
-
-    // Parse responses only if they succeeded
-    const parseResponse = async (result, endpoint) => {
-      if (result.status === 'fulfilled') {
-        try {
-          return await safeJsonParse(result.value);
-        } catch (error) {
-          console.error(`Error parsing ${endpoint}:`, error);
-          return { success: false, data: null, message: error.message };
-        }
-      } else {
-        console.error(`Error fetching ${endpoint}:`, result.reason);
-        return { success: false, data: null, message: result.reason.message };
-      }
-    };
-
-    const [summaryData, projectsHealthData, financialData, clientData, notificationsData] = await Promise.all([
-      parseResponse(summaryResponse, 'summary'),
-      parseResponse(projectsHealthResponse, 'projects/health'),
-      parseResponse(financialResponse, 'financial'),
-      parseResponse(clientDataResponse, 'clients-only'),
-      parseResponse(notificationsResponse, 'notifications')
-    ]);
-
-    // Log results for debugging
-    console.log('Dashboard data fetched:', {
-      summary: summaryData.success,
-      projects: projectsHealthData.success,
-      financial: financialData.success,
-      clientData: clientData.success,
-      notifications: notificationsData.success
+    // 3. Try ONE endpoint first (don't try refresh if it doesn't exist)
+    const response = await fetch(`${API_BASE_URL}/admindashboard/summary`, {
+      method: 'GET',
+      headers,
+      mode: 'cors'
     });
-
-    // Update state with available data
-    setDashboardData(prev => ({
-      ...prev,
-      summary: summaryData.success ? {
-        totalClients: summaryData.data?.totalClients || 0,
-        activeProjects: summaryData.data?.activeProjects || 0,
-        delayedProjects: summaryData.data?.delayedProjects || 0,
-        pendingInvoices: summaryData.data?.pendingInvoices || 0,
-        totalRevenue: summaryData.data?.totalRevenue || 0,
-        pendingRevenue: summaryData.data?.pendingRevenue || 0,
-        paidRevenue: summaryData.data?.paidRevenue || 0,
-        totalTasks: summaryData.data?.totalTasks || 0,
-        overdueTasks: summaryData.data?.overdueTasks || 0
-      } : prev.summary,
-      
-      projects: projectsHealthData.success ? projectsHealthData.data?.projects || [] : prev.projects,
-      
-      financial: financialData.success ? {
-        totalInvoices: financialData.data?.totalInvoices || 0,
-        totalAmount: financialData.data?.totalAmount || 0,
-        paidAmount: financialData.data?.paidAmount || 0,
-        pendingAmount: financialData.data?.pendingAmount || 0,
-        overdueAmount: financialData.data?.overdueAmount || 0,
-        recentInvoices: financialData.data?.recentInvoices || []
-      } : prev.financial,
-      
-      clientData: clientData.success ? {
-        totalClients: clientData.data?.totalClients || 0,
-        activeClients: clientData.data?.activeClients || 0,
-        inactiveClients: clientData.data?.inactiveClients || 0,
-        recentClients: clientData.data?.recentClients || []
-      } : prev.clientData
-    }));
-
-    // Update notifications if available
-    if (notificationsData.success) {
-      setNotifications(notificationsData.data?.notifications || []);
-      setNotificationCount(notificationsData.data?.total || 0);
-    }
-
-    // Show warning if some data failed to load
-    const failedRequests = [
-      !summaryData.success && 'Summary',
-      !projectsHealthData.success && 'Projects',
-      !financialData.success && 'Financial',
-      !clientData.success && 'Clients'
-    ].filter(Boolean);
     
-    if (failedRequests.length > 0) {
-      console.warn(`Failed to load: ${failedRequests.join(', ')}`);
-      if (failedRequests.length === 4) {
-        throw new Error('All dashboard endpoints failed');
+    console.log('📥 Response status:', response.status);
+    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    // 4. Check response type
+    const contentType = response.headers.get('content-type');
+    
+    if (!response.ok) {
+      // Don't try refresh if endpoint doesn't exist
+      if (response.status === 401) {
+        // Check if it's HTML (backend error)
+        if (contentType && contentType.includes('text/html')) {
+          const html = await response.text();
+          console.error('❌ Backend returned HTML (likely route issue):', html.substring(0, 200));
+          
+          setError('Backend authentication error. Please contact support.');
+          return;
+        }
+        
+        // If it's JSON with 401
+        try {
+          const errorData = await response.json();
+          console.error('❌ JSON 401:', errorData);
+          setError('Session expired. Please login again.');
+          
+          setTimeout(() => {
+            localStorage.clear();
+            navigate('/authentication/login');
+          }, 2000);
+        } catch (e) {
+          console.error('❌ Cannot parse 401 response');
+          setError('Authentication failed.');
+        }
       }
+      return;
     }
-
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
     
-    // Check if it's an authentication error
-    if (error.message.includes('Session expired') || 
-        error.message.includes('Authentication required') ||
-        error.message.includes('401') ||
-        error.message.includes('All dashboard endpoints failed')) {
+    // 5. Parse successful response
+    let data;
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+      console.log('✅ Success! Data:', data);
       
-      setError('Your session has expired. Please login again.');
-      
-      // Clear invalid token
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('user');
-      
-      // Redirect to login after a short delay
-      setTimeout(() => {
-        navigate('/authentication/login');
-      }, 2000);
-      
+      // Update your dashboard state here
+      if (data.success) {
+        setDashboardData(prev => ({
+          ...prev,
+          summary: {
+            totalClients: data.data?.totalClients || 0,
+            activeProjects: data.data?.activeProjects || 0,
+            delayedProjects: data.data?.delayedProjects || 0,
+            pendingInvoices: data.data?.pendingInvoices || 0,
+            totalRevenue: data.data?.totalRevenue || 0,
+            pendingRevenue: data.data?.pendingRevenue || 0,
+            paidRevenue: data.data?.paidRevenue || 0,
+            totalTasks: data.data?.totalTasks || 0,
+            overdueTasks: data.data?.overdueTasks || 0
+          }
+        }));
+      }
     } else {
-      setError('Failed to load some dashboard data. Some features may be limited.');
+      const text = await response.text();
+      console.error('❌ Not JSON response:', text.substring(0, 200));
+      setError('Invalid response from server');
     }
+    
+  } catch (error) {
+    console.error('❌ Fetch error:', error);
+    setError('Network error: ' + error.message);
   } finally {
     setLoading(false);
   }
 };
+useEffect(() => {
+  const testRefreshEndpoint = async () => {
+    try {
+      console.log('Testing refresh endpoint...');
+      
+      // Test 1: Simple GET to see if endpoint exists
+      const getResponse = await fetch(`${API_BASE_URL}/user/refresh-token`);
+      console.log('GET response:', getResponse.status);
+      
+      // Test 2: POST with empty body
+      const postResponse = await fetch(`${API_BASE_URL}/user/refresh-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      console.log('POST response:', postResponse.status);
+      
+      // Test 3: Check what the server returns
+      const text = await postResponse.text();
+      console.log('Response text (first 200 chars):', text.substring(0, 200));
+      
+    } catch (error) {
+      console.error('Test error:', error);
+    }
+  };
+  
+  testRefreshEndpoint();
+}, []);
 
 const fetchNotifications = async () => {
   setNotificationLoading(true);
