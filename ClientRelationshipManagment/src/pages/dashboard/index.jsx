@@ -217,15 +217,32 @@ const fetchDashboardData = async () => {
       return;
     }
     
-    // 2. SIMPLE HEADERS - Most important fix
+    // 2. Decode token to verify it
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      console.log('✅ Token decoded:', {
+        id: payload._id,
+        email: payload.email,
+        role: payload.role,
+        roleName: payload.roleName,
+        expires: new Date(payload.exp * 1000).toLocaleString()
+      });
+    } catch (e) {
+      console.error('❌ Invalid token format');
+      localStorage.clear();
+      navigate('/authentication/login');
+      return;
+    }
+    
+    // 3. Create headers
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
     
-    console.log('📤 Sending request with token:', token.substring(0, 50) + '...');
+    console.log('📤 Making request to:', `${API_BASE_URL}/admindashboard/summary`);
     
-    // 3. Try ONE endpoint first (don't try refresh if it doesn't exist)
+    // 4. Make request with better error handling
     const response = await fetch(`${API_BASE_URL}/admindashboard/summary`, {
       method: 'GET',
       headers,
@@ -233,72 +250,90 @@ const fetchDashboardData = async () => {
     });
     
     console.log('📥 Response status:', response.status);
-    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
     
-    // 4. Check response type
+    // 5. Check content type
     const contentType = response.headers.get('content-type');
+    console.log('📥 Content-Type:', contentType);
     
+    // 6. Handle response
     if (!response.ok) {
-      // Don't try refresh if endpoint doesn't exist
+      // Read response as TEXT first (not JSON)
+      const errorText = await response.text();
+      console.error('❌ Backend error response:', errorText.substring(0, 500));
+      
       if (response.status === 401) {
-        // Check if it's HTML (backend error)
-        if (contentType && contentType.includes('text/html')) {
-          const html = await response.text();
-          console.error('❌ Backend returned HTML (likely route issue):', html.substring(0, 200));
+        // Check if it's HTML
+        if (errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
+          console.error('❌ Backend returned HTML instead of JSON');
+          console.error('❌ This is a BACKEND middleware issue!');
           
-          setError('Backend authentication error. Please contact support.');
-          return;
+          setError('Backend authentication error. Your token is valid but backend is rejecting it.');
+          
+          // Show the HTML error for debugging
+          if (errorText.includes('Unauthorized')) {
+            console.error('❌ HTML says: Unauthorized');
+            setError('Backend says: Unauthorized. Contact your backend developer.');
+          }
+        } else {
+          // Try to parse as JSON
+          try {
+            const errorData = JSON.parse(errorText);
+            console.error('❌ JSON error:', errorData);
+            setError(errorData.message || 'Authentication failed');
+          } catch (e) {
+            console.error('❌ Cannot parse error response:', errorText);
+            setError('Authentication failed');
+          }
         }
         
-        // If it's JSON with 401
-        try {
-          const errorData = await response.json();
-          console.error('❌ JSON 401:', errorData);
-          setError('Session expired. Please login again.');
-          
-          setTimeout(() => {
-            localStorage.clear();
-            navigate('/authentication/login');
-          }, 2000);
-        } catch (e) {
-          console.error('❌ Cannot parse 401 response');
-          setError('Authentication failed.');
-        }
+        // Don't logout immediately, give user chance to see error
+        setTimeout(() => {
+          localStorage.clear();
+          navigate('/authentication/login');
+        }, 5000);
       }
       return;
     }
     
-    // 5. Parse successful response
+    // 7. Parse successful response
+    const responseText = await response.text();
+    console.log('📥 Response text (first 500 chars):', responseText.substring(0, 500));
+    
     let data;
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-      console.log('✅ Success! Data:', data);
+    try {
+      data = JSON.parse(responseText);
+      console.log('✅ Parsed JSON:', data);
+    } catch (e) {
+      console.error('❌ Response is not JSON:', responseText);
+      setError('Invalid response from server (not JSON)');
+      return;
+    }
+    
+    // 8. Update state
+    if (data.success) {
+      setDashboardData(prev => ({
+        ...prev,
+        summary: {
+          totalClients: data.data?.totalClients || 0,
+          activeProjects: data.data?.activeProjects || 0,
+          delayedProjects: data.data?.delayedProjects || 0,
+          pendingInvoices: data.data?.pendingInvoices || 0,
+          totalRevenue: data.data?.totalRevenue || 0,
+          pendingRevenue: data.data?.pendingRevenue || 0,
+          paidRevenue: data.data?.paidRevenue || 0,
+          totalTasks: data.data?.totalTasks || 0,
+          overdueTasks: data.data?.overdueTasks || 0
+        }
+      }));
       
-      // Update your dashboard state here
-      if (data.success) {
-        setDashboardData(prev => ({
-          ...prev,
-          summary: {
-            totalClients: data.data?.totalClients || 0,
-            activeProjects: data.data?.activeProjects || 0,
-            delayedProjects: data.data?.delayedProjects || 0,
-            pendingInvoices: data.data?.pendingInvoices || 0,
-            totalRevenue: data.data?.totalRevenue || 0,
-            pendingRevenue: data.data?.pendingRevenue || 0,
-            paidRevenue: data.data?.paidRevenue || 0,
-            totalTasks: data.data?.totalTasks || 0,
-            overdueTasks: data.data?.overdueTasks || 0
-          }
-        }));
-      }
+      setSuccess('Dashboard data loaded successfully!');
+      setTimeout(() => setSuccess(''), 3000);
     } else {
-      const text = await response.text();
-      console.error('❌ Not JSON response:', text.substring(0, 200));
-      setError('Invalid response from server');
+      setError(data.message || 'Failed to load dashboard data');
     }
     
   } catch (error) {
-    console.error('❌ Fetch error:', error);
+    console.error('❌ Network error:', error);
     setError('Network error: ' + error.message);
   } finally {
     setLoading(false);
@@ -652,6 +687,70 @@ return (
               Real-time overview of business performance and key metrics
             </Typography>
           </Box>
+          <Button
+  variant="contained"
+  color="error"
+  onClick={async () => {
+    console.log('🔍 DEBUG: Testing backend middleware');
+    
+    const token = localStorage.getItem('accessToken');
+    const user = JSON.parse(localStorage.getItem('user'));
+    
+    console.log('1. Local storage data:', {
+      token: token?.substring(0, 50) + '...',
+      user: user
+    });
+    
+    // Test 1: Call backend without auth
+    console.log('2. Testing WITHOUT auth:');
+    try {
+      const noAuth = await fetch(`${API_BASE_URL}/admindashboard/summary`);
+      const noAuthText = await noAuth.text();
+      console.log('   Status:', noAuth.status);
+      console.log('   Response:', noAuthText.substring(0, 200));
+    } catch (e) {
+      console.log('   Error:', e.message);
+    }
+    
+    // Test 2: Call backend WITH auth
+    console.log('3. Testing WITH auth:');
+    try {
+      const withAuth = await fetch(`${API_BASE_URL}/admindashboard/summary`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const withAuthText = await withAuth.text();
+      console.log('   Status:', withAuth.status);
+      console.log('   Content-Type:', withAuth.headers.get('content-type'));
+      console.log('   Response:', withAuthText.substring(0, 500));
+      
+      // Try to parse
+      try {
+        const json = JSON.parse(withAuthText);
+        console.log('   JSON:', json);
+      } catch {
+        console.log('   NOT JSON - is HTML');
+      }
+    } catch (e) {
+      console.log('   Error:', e.message);
+    }
+    
+    // Test 3: Test a different endpoint
+    console.log('4. Testing /user/profile:');
+    try {
+      const profile = await fetch(`${API_BASE_URL}/user/profile`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const profileText = await profile.text();
+      console.log('   Status:', profile.status);
+      console.log('   Response:', profileText.substring(0, 200));
+    } catch (e) {
+      console.log('   Error:', e.message);
+    }
+  }}
+  sx={{ ml: 1, mt: 1 }}
+>
+  Debug Backend Middleware
+</Button>
           
        <Stack direction="row" spacing={2} alignItems="center">
   {/* Notification Bell */}
