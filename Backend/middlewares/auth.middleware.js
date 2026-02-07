@@ -7,8 +7,8 @@ import { User } from "../models/user.model.js";
 export const verifyJWT = asynchandler(async (req, res, next) => {
   let token;
 
-
-  if (!token && req.headers.authorization?.startsWith("Bearer ")) {
+  // Get token from Authorization header
+  if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.split(" ")[1];
   }
 
@@ -30,7 +30,7 @@ export const verifyJWT = asynchandler(async (req, res, next) => {
     next();
   } catch (error) {
     console.error("JWT VERIFY ERROR:", error.message);
-    throw new ApiError(401, error.message);
+    throw new ApiError(401, "Invalid or expired token");
   }
 });
 
