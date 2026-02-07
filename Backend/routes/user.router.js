@@ -9,7 +9,8 @@ import {
   getAllUsers,
   getUsersByRole,
   updateProfile,
-  changePassword
+  changePassword,
+  refreshAccessToken
 
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -21,6 +22,7 @@ router.route("/signup").post(signupUser);
 router.route("/login").post(loginUser);
 router.route("/forgot-password").post(forgotPassword);
 router.route("/reset-password/:token").post(resetPassword);
+router.route("/refresh-token").post(refreshAccessToken);
 
 // Protected routes
 router.route("/logout").post(verifyJWT, logoutUser);

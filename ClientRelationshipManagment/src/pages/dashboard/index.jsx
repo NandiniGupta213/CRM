@@ -126,6 +126,70 @@ const [hoveredBars, setHoveredBars] = useState({});
   const navigate = useNavigate();
   const API_BASE_URL = 'https://crm-rx6f.onrender.com';
 
+const refreshAccessToken = async () => {
+  try {
+    console.log('🔄 Attempting to refresh access token...');
+    
+    // Get refresh token from localStorage
+    const refreshToken = localStorage.getItem('refreshToken');
+    
+    if (!refreshToken) {
+      console.log('❌ No refresh token found');
+      return false;
+    }
+    
+    // Send refresh token in request body (not cookies)
+    const response = await fetch(`${API_BASE_URL}/user/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }), // Send in body
+      // NO credentials: 'include' since we're not using cookies
+    });
+    
+    console.log('Refresh response status:', response.status);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Token refresh response:', data);
+      
+      if (data.success && data.data?.accessToken) {
+        // Update both tokens in localStorage
+        localStorage.setItem('accessToken', data.data.accessToken);
+        localStorage.setItem('refreshToken', data.data.refreshToken);
+        console.log('✅ Tokens updated in localStorage');
+        return true;
+      }
+    }
+    
+    console.log('❌ Token refresh failed');
+    return false;
+    
+  } catch (error) {
+    console.error('❌ Error refreshing token:', error);
+    return false;
+  }
+};
+
+// Helper function to safely parse JSON
+const safeJsonParse = async (response) => {
+  try {
+    const text = await response.text();
+    
+    // Check if response is HTML (login page or error page)
+    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html') || text.includes('</html>')) {
+      console.error('Received HTML instead of JSON:', text.substring(0, 200));
+      throw new Error('Server returned HTML page - likely authentication issue');
+    }
+    
+    return JSON.parse(text);
+  } catch (error) {
+    console.error('JSON parse error:', error.message);
+    return { success: false, data: null, message: error.message };
+  }
+};
+
 const fetchDashboardData = async () => {
   setLoading(true);
   setError('');
@@ -136,7 +200,7 @@ const fetchDashboardData = async () => {
     if (!token) {
       setError('Please login to view dashboard');
       setLoading(false);
-      navigate('/login');
+      navigate('/authentication/login');
       return;
     }
 
@@ -145,61 +209,116 @@ const fetchDashboardData = async () => {
       'Content-Type': 'application/json'
     };
 
-    // Helper function to handle API calls with better error handling
-    const fetchWithAuth = async (url) => {
-      const response = await fetch(url, { headers });
+   const fetchWithAuth = async (url, retryCount = 0) => {
+  const token = localStorage.getItem('accessToken');
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+  
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+  
+  const response = await fetch(url, { headers });
+  
+  // Handle 401 - Try to refresh token
+  if (response.status === 401) {
+    console.log('Token expired, attempting refresh...');
+    
+    // Don't retry more than once
+    if (retryCount > 0) {
+      throw new Error('Session expired. Please login again.');
+    }
+    
+    const refreshSuccess = await refreshAccessToken();
+    if (refreshSuccess) {
+      // Retry with new token
+      const newToken = localStorage.getItem('accessToken');
+      const newHeaders = {
+        ...headers,
+        'Authorization': `Bearer ${newToken}`
+      };
+      return fetch(url, { headers: newHeaders });
+    } else {
+      // Refresh failed, clear tokens and redirect
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
       
-      // Check if response is unauthorized
-      if (response.status === 401) {
-        // Try to refresh token first
-        const refreshSuccess = await refreshAccessToken();
-        if (refreshSuccess) {
-          // Retry with new token
-          const newToken = localStorage.getItem('accessToken');
-          const newHeaders = {
-            ...headers,
-            'Authorization': `Bearer ${newToken}`
-          };
-          const retryResponse = await fetch(url, { headers: newHeaders });
-          return retryResponse;
-        } else {
-          // Refresh failed, redirect to login
-          navigate('/login');
-          throw new Error('Session expired. Please login again.');
-        }
-      }
+      setError('Your session has expired. Please login again.');
       
-      // Check if response is not OK
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      setTimeout(() => {
+        navigate('/authentication/login');
+      }, 2000);
       
-      return response;
+      throw new Error('Session expired. Please login again.');
+    }
+  }
+  
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  
+  return response;
+};
+
+    // Fetch all dashboard data with timeout
+    const fetchWithTimeout = (url, timeout = 10000) => {
+      return Promise.race([
+        fetchWithAuth(url),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), timeout)
+        )
+      ]);
     };
 
-    // Fetch all dashboard data
     const [
       summaryResponse,
       projectsHealthResponse,
       financialResponse,
       clientDataResponse,
       notificationsResponse
-    ] = await Promise.all([
-      fetchWithAuth(`${API_BASE_URL}/admindashboard/summary`).catch(() => null),
-      fetchWithAuth(`${API_BASE_URL}/admindashboard/projects/health`).catch(() => null),
-      fetchWithAuth(`${API_BASE_URL}/admindashboard/financial`).catch(() => null),
-      fetchWithAuth(`${API_BASE_URL}/admindashboard/clients-only`).catch(() => null),
-      fetchWithAuth(`${API_BASE_URL}/admindashboard/notifications`).catch(() => null)
+    ] = await Promise.allSettled([
+      fetchWithTimeout(`${API_BASE_URL}/admindashboard/summary`),
+      fetchWithTimeout(`${API_BASE_URL}/admindashboard/projects/health`),
+      fetchWithTimeout(`${API_BASE_URL}/admindashboard/financial`),
+      fetchWithTimeout(`${API_BASE_URL}/admindashboard/clients-only`),
+      fetchWithTimeout(`${API_BASE_URL}/admindashboard/notifications`)
     ]);
 
-    // Parse responses only if they exist
+    // Parse responses only if they succeeded
+    const parseResponse = async (result, endpoint) => {
+      if (result.status === 'fulfilled') {
+        try {
+          return await safeJsonParse(result.value);
+        } catch (error) {
+          console.error(`Error parsing ${endpoint}:`, error);
+          return { success: false, data: null, message: error.message };
+        }
+      } else {
+        console.error(`Error fetching ${endpoint}:`, result.reason);
+        return { success: false, data: null, message: result.reason.message };
+      }
+    };
+
     const [summaryData, projectsHealthData, financialData, clientData, notificationsData] = await Promise.all([
-      summaryResponse ? summaryResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
-      projectsHealthResponse ? projectsHealthResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
-      financialResponse ? financialResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
-      clientDataResponse ? clientDataResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null },
-      notificationsResponse ? notificationsResponse.json().catch(() => ({ success: false, data: null })) : { success: false, data: null }
+      parseResponse(summaryResponse, 'summary'),
+      parseResponse(projectsHealthResponse, 'projects/health'),
+      parseResponse(financialResponse, 'financial'),
+      parseResponse(clientDataResponse, 'clients-only'),
+      parseResponse(notificationsResponse, 'notifications')
     ]);
+
+    // Log results for debugging
+    console.log('Dashboard data fetched:', {
+      summary: summaryData.success,
+      projects: projectsHealthData.success,
+      financial: financialData.success,
+      clientData: clientData.success,
+      notifications: notificationsData.success
+    });
 
     // Update state with available data
     setDashboardData(prev => ({
@@ -218,9 +337,21 @@ const fetchDashboardData = async () => {
       
       projects: projectsHealthData.success ? projectsHealthData.data?.projects || [] : prev.projects,
       
-      financial: financialData.success ? financialData.data || prev.financial : prev.financial,
+      financial: financialData.success ? {
+        totalInvoices: financialData.data?.totalInvoices || 0,
+        totalAmount: financialData.data?.totalAmount || 0,
+        paidAmount: financialData.data?.paidAmount || 0,
+        pendingAmount: financialData.data?.pendingAmount || 0,
+        overdueAmount: financialData.data?.overdueAmount || 0,
+        recentInvoices: financialData.data?.recentInvoices || []
+      } : prev.financial,
       
-      clientData: clientData.success ? clientData.data || prev.clientData : prev.clientData
+      clientData: clientData.success ? {
+        totalClients: clientData.data?.totalClients || 0,
+        activeClients: clientData.data?.activeClients || 0,
+        inactiveClients: clientData.data?.inactiveClients || 0,
+        recentClients: clientData.data?.recentClients || []
+      } : prev.clientData
     }));
 
     // Update notifications if available
@@ -229,15 +360,41 @@ const fetchDashboardData = async () => {
       setNotificationCount(notificationsData.data?.total || 0);
     }
 
+    // Show warning if some data failed to load
+    const failedRequests = [
+      !summaryData.success && 'Summary',
+      !projectsHealthData.success && 'Projects',
+      !financialData.success && 'Financial',
+      !clientData.success && 'Clients'
+    ].filter(Boolean);
+    
+    if (failedRequests.length > 0) {
+      console.warn(`Failed to load: ${failedRequests.join(', ')}`);
+      if (failedRequests.length === 4) {
+        throw new Error('All dashboard endpoints failed');
+      }
+    }
+
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
     
     // Check if it's an authentication error
-    if (error.message.includes('Session expired') || error.message.includes('401')) {
+    if (error.message.includes('Session expired') || 
+        error.message.includes('Authentication required') ||
+        error.message.includes('401') ||
+        error.message.includes('All dashboard endpoints failed')) {
+      
       setError('Your session has expired. Please login again.');
+      
       // Clear invalid token
       localStorage.removeItem('accessToken');
-      navigate('/login');
+      localStorage.removeItem('user');
+      
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        navigate('/authentication/login');
+      }, 2000);
+      
     } else {
       setError('Failed to load some dashboard data. Some features may be limited.');
     }
@@ -250,14 +407,39 @@ const fetchNotifications = async () => {
   setNotificationLoading(true);
   try {
     const token = localStorage.getItem('accessToken');
-    const response = await fetch(`${API_BASE_URL}/admindashboard/notifications`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
     
-    if (response.ok) {
+    if (!token) {
+      console.log('No token for notifications');
+      return;
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+    const response = await fetch(`${API_BASE_URL}/admindashboard/notifications`, { headers });
+    
+    // Handle 401
+    if (response.status === 401) {
+      const refreshSuccess = await refreshAccessToken();
+      if (refreshSuccess) {
+        const newToken = localStorage.getItem('accessToken');
+        const newHeaders = {
+          ...headers,
+          'Authorization': `Bearer ${newToken}`
+        };
+        const retryResponse = await fetch(`${API_BASE_URL}/admindashboard/notifications`, { headers: newHeaders });
+        
+        if (retryResponse.ok) {
+          const data = await retryResponse.json();
+          if (data.success) {
+            setNotifications(data.data.notifications || []);
+            setNotificationCount(data.data.total || 0);
+          }
+        }
+      }
+    } else if (response.ok) {
       const data = await response.json();
       if (data.success) {
         setNotifications(data.data.notifications || []);

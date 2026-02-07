@@ -111,7 +111,7 @@ const EmployeeDashboard = () => {
     if (!token) {
       setError('Please login to view dashboard');
       setLoading(false);
-      navigate('/login');
+      navigate('/authentication/login');
       return;
     }
 

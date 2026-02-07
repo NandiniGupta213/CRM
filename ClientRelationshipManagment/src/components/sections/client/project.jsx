@@ -86,7 +86,7 @@ const ClientProjectsPage = () => {
       
       if (!token) {
         setError('Please login to view projects');
-        navigate('/login');
+        navigate('/authentication/login');
         return;
       }
 

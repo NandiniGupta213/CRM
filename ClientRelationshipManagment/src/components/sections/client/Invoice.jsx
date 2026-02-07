@@ -86,7 +86,7 @@ const ClientInvoicesPage = () => {
       const token = localStorage.getItem('accessToken');
       
       if (!token) {
-        navigate('/login');
+        navigate('/authentication/login');
         return;
       }
 

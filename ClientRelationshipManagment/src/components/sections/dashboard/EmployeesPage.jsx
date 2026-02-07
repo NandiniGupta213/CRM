@@ -99,7 +99,7 @@ const EmployeesPage = () => {
           localStorage.removeItem('accessToken');
           setErrorMessage('Session expired. Please login again.');
           setTimeout(() => setErrorMessage(''), 5000);
-          window.location.href = '/login';
+          window.location.href = '/authentication/login';
         }
         throw new Error(`HTTP error! status: ${response.status}`);
       }

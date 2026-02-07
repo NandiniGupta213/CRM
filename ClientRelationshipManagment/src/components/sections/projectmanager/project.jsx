@@ -103,7 +103,7 @@ const fetchData = async () => {
     // Check for authentication error first
     if (projectsRes.status === 401 || clientsRes.status === 401 || teamRes.status === 401) {
       localStorage.removeItem('accessToken');
-      window.location.href = '/login';
+      window.location.href = '/authentication/login';
       return;
     }
 

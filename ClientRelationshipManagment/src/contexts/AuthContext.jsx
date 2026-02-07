@@ -63,58 +63,68 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
-  const login = async (email, password) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/user/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+const login = async (email, password) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/user/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
 
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Non-JSON response:', text);
-        return { 
-          success: false, 
-          error: 'Server returned invalid response' 
-        };
-      }
-
-      const data = await response.json();
-      console.log('Login response data:', data);
-
-      if (!response.ok) {
-        return { 
-          success: false, 
-          error: data.message || 'Login failed' 
-        };
-      }
-
-      // Store user data and token
-      const userData = data.data.user;
-      const accessToken = data.data.accessToken;
-      
-      console.log('User data to store:', userData);
-      console.log('Access token:', accessToken);
-      
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('accessToken', accessToken);
-      
-      setUser(userData);
-
-      return { success: true, user: userData };
-    } catch (error) {
-      console.error('Login error:', error);
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('Non-JSON response:', text);
       return { 
         success: false, 
-        error: error.message || 'Network error. Please try again.' 
+        error: 'Server returned invalid response' 
       };
     }
-  };
+
+    const data = await response.json();
+    console.log('🔥 LOGIN RESPONSE:', data);
+
+    if (!response.ok) {
+      return { 
+        success: false, 
+        error: data.message || 'Login failed' 
+      };
+    }
+
+    // Store user data and BOTH tokens
+    const userData = data.data.user;
+    const accessToken = data.data.accessToken;
+    const refreshToken = data.data.refreshToken; // Get refresh token
+    
+    console.log('🔥 Tokens received:', {
+      accessToken: accessToken?.substring(0, 20) + '...',
+      refreshToken: refreshToken?.substring(0, 20) + '...',
+      hasRefreshToken: !!refreshToken
+    });
+    
+    if (!refreshToken) {
+      console.warn('⚠️ No refresh token received from server!');
+    }
+    
+    // Store in localStorage
+    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem('accessToken', accessToken);
+    localStorage.setItem('refreshToken', refreshToken); // Store refresh token
+    
+    setUser(userData);
+
+    return { success: true, user: userData };
+  } catch (error) {
+    console.error('Login error:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Network error. Please try again.' 
+    };
+  }
+};
 
   const checkAuthStatus = async () => {
     try {

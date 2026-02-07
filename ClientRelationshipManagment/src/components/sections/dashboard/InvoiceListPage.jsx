@@ -69,7 +69,7 @@ const InvoiceListPage = () => {
         setErrorMessage('Please login to access invoices');
         setTimeout(() => setErrorMessage(''), 5000);
         setLoading(false);
-        navigate('/login');
+        navigate('/authentication/login');
         return;
       }
 
@@ -97,7 +97,7 @@ const InvoiceListPage = () => {
           localStorage.removeItem('accessToken');
           setErrorMessage('Session expired. Please login again.');
           setTimeout(() => setErrorMessage(''), 5000);
-          navigate('/login');
+          navigate('/authentication/login');
           return;
         }
         throw new Error(`HTTP error! status: ${response.status}`);

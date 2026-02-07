@@ -150,7 +150,7 @@ const ProjectTeamManagement = () => {
       if (!response.ok) {
         if (response.status === 401) {
           localStorage.removeItem('accessToken');
-          window.location.href = '/login';
+          window.location.href = '/authentication/login';
           return;
         }
         throw new Error(`HTTP ${response.status}: Failed to fetch project teams`);

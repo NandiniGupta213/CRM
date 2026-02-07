@@ -40,15 +40,19 @@ const userSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    refreshToken: {
+      type: String,
+      default: null
+    },
     employeeRef: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: 'Employee'
-},
-employeeId: {
-  type: String,
-  trim: true
-},
-clientRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Employee'
+    },
+    employeeId: {
+      type: String,
+      trim: true
+    },
+    clientRef: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Client'
     },
@@ -64,27 +68,40 @@ clientRef: {
   }
 );
 
-userSchema.pre("save", async function() {
+// Pre-save middleware
+userSchema.pre("save", async function(next) {
+  // Only hash password if modified
   if (this.isModified("password")) {
-    this.password = await bcrypt.hash(this.password, 10);
+    try {
+      this.password = await bcrypt.hash(this.password, 10);
+    } catch (error) {
+      return next(error);
+    }
   }
   
-  const roleNames = {
-    1: "Admin",
-    2: "Project Manager",
-    3: "Employee",
-    4: "Client",
-  };
-  this.roleName = roleNames[this.role] || "Employee";
+  // Map role number to role name
+  if (this.isModified("role")) {
+    const roleNames = {
+      1: "Admin",
+      2: "Project Manager",
+      3: "Employee",
+      4: "Client",
+    };
+    this.roleName = roleNames[this.role] || "Employee";
+  }
+  
+  next();
 });
 
-userSchema.methods.isPasswordCorrect = async function (password) {
+// Password comparison method
+userSchema.methods.isPasswordCorrect = async function(password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// UPDATED: Add fallback secrets
-userSchema.methods.generateAuthToken = function () {
+// Generate access token - INCREASED EXPIRY
+userSchema.methods.generateAuthToken = function() {
   const secret = process.env.ACCESS_TOKEN_SECRET || "dev_access_secret_12345";
+  const expiry = process.env.ACCESS_TOKEN_EXPIRY || "24h"; // Changed from "1d" to "24h"
   
   return jwt.sign(
     {
@@ -94,22 +111,26 @@ userSchema.methods.generateAuthToken = function () {
       roleName: this.roleName,
     },
     secret,
-    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY || "1d" }
+    { expiresIn: expiry }
   );
 };
 
-userSchema.methods.generateRefreshToken = function () {
+// Generate refresh token - INCREASED EXPIRY
+userSchema.methods.generateRefreshToken = function() {
   const secret = process.env.REFRESH_TOKEN_SECRET || "dev_refresh_secret_12345";
+  const expiry = process.env.REFRESH_TOKEN_EXPIRY || "7d";
+  
   return jwt.sign(
     {
       _id: this._id,
     },
     secret,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRY || "7d" }
+    { expiresIn: expiry }
   );
 };
 
-userSchema.methods.generateResetToken = function () {
+// Generate password reset token
+userSchema.methods.generateResetToken = function() {
   const resetToken = crypto.randomBytes(32).toString("hex");
 
   this.resetPasswordToken = crypto
