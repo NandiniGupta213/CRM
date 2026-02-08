@@ -203,138 +203,224 @@ const safeJsonParse = async (response) => {
 const fetchDashboardData = async () => {
   setLoading(true);
   setError('');
+  setSuccess('');
   
   try {
     console.log('🔄 Fetching dashboard data...');
     
-    // 1. Get token
+    // 1. Get token and user from localStorage
     const token = localStorage.getItem('accessToken');
-    const user = localStorage.getItem('user');
+    const userStr = localStorage.getItem('user');
     
-    if (!token || !user) {
-      console.log('❌ No auth data');
-      navigate('/authentication/login');
-      return;
-    }
+    console.log('🔑 Token from localStorage:', token ? `${token.substring(0, 30)}...` : 'NOT FOUND');
+    console.log('👤 User from localStorage:', userStr ? 'Found' : 'NOT FOUND');
     
-    // 2. Decode token to verify it
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      console.log('✅ Token decoded:', {
-        id: payload._id,
-        email: payload.email,
-        role: payload.role,
-        roleName: payload.roleName,
-        expires: new Date(payload.exp * 1000).toLocaleString()
-      });
-    } catch (e) {
-      console.error('❌ Invalid token format');
+    // 2. Validate auth data
+    if (!token || !userStr) {
+      console.error('❌ Missing authentication data');
       localStorage.clear();
       navigate('/authentication/login');
       return;
     }
     
-    // 3. Create headers
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
+    // 3. Validate token format
+    let userData;
+    try {
+      userData = JSON.parse(userStr);
+      console.log('✅ User data parsed:', { email: userData.email, role: userData.roleName });
+    } catch (e) {
+      console.error('❌ Invalid user data in localStorage');
+      localStorage.clear();
+      navigate('/authentication/login');
+      return;
+    }
     
-    console.log('📤 Making request to:', `${API_BASE_URL}/admindashboard/summary`);
-    
-    // 4. Make request with better error handling
-    const response = await fetch(`${API_BASE_URL}/admindashboard/summary`, {
-      method: 'GET',
-      headers,
-      mode: 'cors'
-    });
-    
-    console.log('📥 Response status:', response.status);
-    
-    // 5. Check content type
-    const contentType = response.headers.get('content-type');
-    console.log('📥 Content-Type:', contentType);
-    
-    // 6. Handle response
-    if (!response.ok) {
-      // Read response as TEXT first (not JSON)
-      const errorText = await response.text();
-      console.error('❌ Backend error response:', errorText.substring(0, 500));
+    // 4. Check token expiration
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expirationTime = payload.exp * 1000;
+      const currentTime = Date.now();
       
-      if (response.status === 401) {
-        // Check if it's HTML
-        if (errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
-          console.error('❌ Backend returned HTML instead of JSON');
-          console.error('❌ This is a BACKEND middleware issue!');
-          
-          setError('Backend authentication error. Your token is valid but backend is rejecting it.');
-          
-          // Show the HTML error for debugging
-          if (errorText.includes('Unauthorized')) {
-            console.error('❌ HTML says: Unauthorized');
-            setError('Backend says: Unauthorized. Contact your backend developer.');
-          }
-        } else {
-          // Try to parse as JSON
-          try {
-            const errorData = JSON.parse(errorText);
-            console.error('❌ JSON error:', errorData);
-            setError(errorData.message || 'Authentication failed');
-          } catch (e) {
-            console.error('❌ Cannot parse error response:', errorText);
-            setError('Authentication failed');
-          }
-        }
-        
-        // Don't logout immediately, give user chance to see error
+      console.log('🔍 Token check:', {
+        userId: payload._id,
+        email: payload.email,
+        role: payload.roleName,
+        issued: new Date(payload.iat * 1000).toLocaleString(),
+        expires: new Date(expirationTime).toLocaleString(),
+        isExpired: expirationTime < currentTime
+      });
+      
+      // If token expires in less than 5 minutes, refresh it
+      if (expirationTime - currentTime < 5 * 60 * 1000) {
+        console.log('⚠️ Token expiring soon, consider refreshing');
+      }
+      
+      if (expirationTime < currentTime) {
+        console.error('❌ Token expired');
+        setError('Session expired. Please login again.');
         setTimeout(() => {
           localStorage.clear();
           navigate('/authentication/login');
-        }, 5000);
+        }, 2000);
+        return;
       }
-      return;
-    }
-    
-    // 7. Parse successful response
-    const responseText = await response.text();
-    console.log('📥 Response text (first 500 chars):', responseText.substring(0, 500));
-    
-    let data;
-    try {
-      data = JSON.parse(responseText);
-      console.log('✅ Parsed JSON:', data);
     } catch (e) {
-      console.error('❌ Response is not JSON:', responseText);
-      setError('Invalid response from server (not JSON)');
+      console.error('❌ Invalid token format:', e.message);
+      localStorage.clear();
+      navigate('/authentication/login');
       return;
     }
     
-    // 8. Update state
-    if (data.success) {
-      setDashboardData(prev => ({
-        ...prev,
-        summary: {
-          totalClients: data.data?.totalClients || 0,
-          activeProjects: data.data?.activeProjects || 0,
-          delayedProjects: data.data?.delayedProjects || 0,
-          pendingInvoices: data.data?.pendingInvoices || 0,
-          totalRevenue: data.data?.totalRevenue || 0,
-          pendingRevenue: data.data?.pendingRevenue || 0,
-          paidRevenue: data.data?.paidRevenue || 0,
-          totalTasks: data.data?.totalTasks || 0,
-          overdueTasks: data.data?.overdueTasks || 0
-        }
-      }));
+    // 5. Prepare request
+    const headers = {
+      'Authorization': `Bearer ${token.trim()}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    
+    const requestUrl = `${API_BASE_URL}/admindashboard/summary`;
+    console.log('📤 Request details:', {
+      url: requestUrl,
+      method: 'GET',
+      headers: headers
+    });
+    
+    // 6. Make API call with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(requestUrl, {
+      method: 'GET',
+      headers,
+      mode: 'cors',
+      credentials: 'include',
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeoutId));
+    
+    console.log('📥 Response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      headers: Object.fromEntries(response.headers.entries())
+    });
+    
+    // 7. Handle non-success responses
+    if (!response.ok) {
+      let errorMessage = `Server error: ${response.status} ${response.statusText}`;
       
-      setSuccess('Dashboard data loaded successfully!');
-      setTimeout(() => setSuccess(''), 3000);
-    } else {
-      setError(data.message || 'Failed to load dashboard data');
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('❌ Backend JSON error:', errorData);
+        } else {
+          const errorText = await response.text();
+          console.error('❌ Backend non-JSON error:', errorText.substring(0, 200));
+          
+          if (errorText.includes('Unauthorized') || errorText.includes('401')) {
+            errorMessage = 'Session expired. Please login again.';
+          } else if (errorText.includes('Forbidden') || errorText.includes('403')) {
+            errorMessage = 'Access denied. Admin privileges required.';
+          }
+        }
+      } catch (parseError) {
+        console.error('❌ Error parsing error response:', parseError);
+      }
+      
+      // Handle specific status codes
+      if (response.status === 401) {
+        console.log('🔐 Unauthorized - clearing local storage');
+        setError('Session expired. Redirecting to login...');
+        setTimeout(() => {
+          localStorage.clear();
+          navigate('/authentication/login');
+        }, 2000);
+        return;
+      }
+      
+      if (response.status === 403) {
+        setError('Access denied. Admin privileges required.');
+        return;
+      }
+      
+      setError(errorMessage);
+      return;
     }
+    
+    // 8. Parse successful response
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error('❌ Expected JSON but got:', contentType, text.substring(0, 200));
+      setError('Invalid response format from server');
+      return;
+    }
+    
+    const data = await response.json();
+    console.log('✅ API Response:', {
+      success: data.success,
+      statusCode: data.statusCode,
+      message: data.message,
+      dataKeys: data.data ? Object.keys(data.data) : 'No data'
+    });
+    
+    // 9. Validate response structure
+    if (!data || typeof data !== 'object') {
+      console.error('❌ Invalid response structure:', data);
+      setError('Invalid response from server');
+      return;
+    }
+    
+    if (!data.success) {
+      console.error('❌ API returned non-success:', data);
+      setError(data.message || 'Failed to load dashboard data');
+      return;
+    }
+    
+    if (!data.data || typeof data.data !== 'object') {
+      console.error('❌ No data in response:', data);
+      setError('No data received from server');
+      return;
+    }
+    
+    // 10. Update state with dashboard data
+    const dashboardStats = {
+      totalClients: Number(data.data.totalClients) || 0,
+      activeProjects: Number(data.data.activeProjects) || 0,
+      delayedProjects: Number(data.data.delayedProjects) || 0,
+      pendingInvoices: Number(data.data.pendingInvoices) || 0,
+      totalRevenue: Number(data.data.totalRevenue) || 0,
+      pendingRevenue: Number(data.data.pendingRevenue) || 0,
+      paidRevenue: Number(data.data.paidRevenue) || 0,
+      totalTasks: Number(data.data.totalTasks) || 0,
+      overdueTasks: Number(data.data.overdueTasks) || 0,
+      projectsWithHealth: Array.isArray(data.data.projectsWithHealth) 
+        ? data.data.projectsWithHealth 
+        : []
+    };
+    
+    console.log('📊 Dashboard stats to set:', dashboardStats);
+    
+    setDashboardData(prev => ({
+      ...prev,
+      summary: dashboardStats
+    }));
+    
+    setSuccess(data.message || 'Dashboard data loaded successfully!');
+    setTimeout(() => setSuccess(''), 3000);
     
   } catch (error) {
-    console.error('❌ Network error:', error);
-    setError('Network error: ' + error.message);
+    console.error('❌ fetchDashboardData error:', error);
+    
+    if (error.name === 'AbortError') {
+      setError('Request timeout. Please try again.');
+    } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      setError('Network error. Please check your connection.');
+    } else {
+      setError(`Error: ${error.message}`);
+    }
+    
   } finally {
     setLoading(false);
   }

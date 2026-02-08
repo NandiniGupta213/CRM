@@ -30,7 +30,7 @@ const app = express();
     origin: ['https://fronetendcrm.onrender.com', 'http://localhost:5173','http://localhost:8000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: false 
+    credentials: true
   }));
 
 
