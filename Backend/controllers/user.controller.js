@@ -233,8 +233,6 @@ const logoutUser = asynchandler(async (req, res) => {
   );
 
  
-  res.clearCookie("accessToken");
-  res.clearCookie("refreshToken");
 
   return res
     .status(200)
@@ -363,18 +361,22 @@ const changePassword = asynchandler(async (req, res) => {
 });
 
 // Refresh access token
+// user.controller.js - refreshAccessToken
 const refreshAccessToken = asynchandler(async (req, res) => {
   const incomingRefreshToken = req.body.refreshToken;
-  console.log(incomingRefreshToken)
-
+  
   if (!incomingRefreshToken) {
     throw new ApiError(401, "Refresh token is required in request body");
   }
-console.log('Using secret:', process.env.REFRESH_TOKEN_SECRET);
+
   try {
+    // Use the REFRESH secret
+    const REFRESH_SECRET = "dev_refresh_secret_12345";
+    console.log('🔐 Verifying refresh token with:', REFRESH_SECRET);
+    
     const decoded = jwt.verify(
       incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET || "dev_refresh_secret_12345"
+      REFRESH_SECRET
     );
 
     const user = await User.findById(decoded._id);
@@ -391,21 +393,22 @@ console.log('Using secret:', process.env.REFRESH_TOKEN_SECRET);
     const newAccessToken = user.generateAuthToken();
     const newRefreshToken = user.generateRefreshToken();
 
+    // Update database
+    user.refreshToken = newRefreshToken;
+    await user.save({ validateBeforeSave: false });
 
-    // Return tokens in response body (NO cookies)
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(
-          200,
-          {
-            accessToken: newAccessToken,
-            refreshToken: newRefreshToken, // Send new refresh token back
-          },
-          "Access token refreshed successfully"
-        )
-      );
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          accessToken: newAccessToken,
+          refreshToken: newRefreshToken,
+        },
+        "Access token refreshed successfully"
+      )
+    );
   } catch (error) {
+    console.error("Refresh token error:", error.message);
     throw new ApiError(401, error?.message || "Invalid refresh token");
   }
 });

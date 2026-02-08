@@ -96,10 +96,11 @@ userSchema.methods.isPasswordCorrect = async function(password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// Generate access token - INCREASED EXPIRY
+// models/user.model.js
 userSchema.methods.generateAuthToken = function() {
-  const secret = process.env.ACCESS_TOKEN_SECRET || "dev_access_secret_12345";
-  const expiry = process.env.ACCESS_TOKEN_EXPIRY || "24h"; // Changed from "1d" to "24h"
+  // USE THE SAME SECRET
+  const CORRECT_SECRET = "dev_access_secret_12345";
+  console.log('🔐 Generating ACCESS token with:', CORRECT_SECRET);
   
   return jwt.sign(
     {
@@ -108,22 +109,20 @@ userSchema.methods.generateAuthToken = function() {
       role: this.role,
       roleName: this.roleName,
     },
-    secret,
-    { expiresIn: expiry }
+    CORRECT_SECRET, // ← SAME SECRET
+    { expiresIn: "24h" }
   );
 };
 
-// Generate refresh token - INCREASED EXPIRY
 userSchema.methods.generateRefreshToken = function() {
-  const secret = process.env.REFRESH_TOKEN_SECRET || "dev_refresh_secret_12345";
-  const expiry = process.env.REFRESH_TOKEN_EXPIRY || "7d";
+  // For refresh tokens, use the refresh secret
+  const REFRESH_SECRET = "dev_refresh_secret_12345"; // Different for refresh
+  console.log('🔐 Generating REFRESH token with:', REFRESH_SECRET);
   
   return jwt.sign(
-    {
-      _id: this._id,
-    },
-    secret,
-    { expiresIn: expiry }
+    { _id: this._id },
+    REFRESH_SECRET, // ← DIFFERENT for refresh tokens
+    { expiresIn: "7d" }
   );
 };
 

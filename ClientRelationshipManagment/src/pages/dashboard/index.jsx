@@ -124,7 +124,7 @@ const [hoveredBars, setHoveredBars] = useState({});
   });
   
   const navigate = useNavigate();
-  const API_BASE_URL = 'https://crm-rx6f.onrender.com';
+  const API_BASE_URL = 'http://localhost:8000';
 
 const refreshAccessToken = async () => {
   try {
@@ -199,232 +199,84 @@ const safeJsonParse = async (response) => {
     return { success: false, data: null, message: error.message };
   }
 };
-
 const fetchDashboardData = async () => {
   setLoading(true);
   setError('');
-  setSuccess('');
   
   try {
-    console.log('🔄 Fetching dashboard data...');
-    
-    // 1. Get token and user from localStorage
     const token = localStorage.getItem('accessToken');
-    const userStr = localStorage.getItem('user');
     
-    console.log('🔑 Token from localStorage:', token ? `${token.substring(0, 30)}...` : 'NOT FOUND');
-    console.log('👤 User from localStorage:', userStr ? 'Found' : 'NOT FOUND');
-    
-    // 2. Validate auth data
-    if (!token || !userStr) {
-      console.error('❌ Missing authentication data');
-      localStorage.clear();
+    if (!token) {
+      setError('Please login to view dashboard');
+      setLoading(false);
       navigate('/authentication/login');
       return;
     }
-    
-    // 3. Validate token format
-    let userData;
-    try {
-      userData = JSON.parse(userStr);
-      console.log('✅ User data parsed:', { email: userData.email, role: userData.roleName });
-    } catch (e) {
-      console.error('❌ Invalid user data in localStorage');
-      localStorage.clear();
-      navigate('/authentication/login');
-      return;
-    }
-    
-    // 4. Check token expiration
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const expirationTime = payload.exp * 1000;
-      const currentTime = Date.now();
-      
-      console.log('🔍 Token check:', {
-        userId: payload._id,
-        email: payload.email,
-        role: payload.roleName,
-        issued: new Date(payload.iat * 1000).toLocaleString(),
-        expires: new Date(expirationTime).toLocaleString(),
-        isExpired: expirationTime < currentTime
-      });
-      
-      // If token expires in less than 5 minutes, refresh it
-      if (expirationTime - currentTime < 5 * 60 * 1000) {
-        console.log('⚠️ Token expiring soon, consider refreshing');
-      }
-      
-      if (expirationTime < currentTime) {
-        console.error('❌ Token expired');
-        setError('Session expired. Please login again.');
-        setTimeout(() => {
-          localStorage.clear();
-          navigate('/authentication/login');
-        }, 2000);
-        return;
-      }
-    } catch (e) {
-      console.error('❌ Invalid token format:', e.message);
-      localStorage.clear();
-      navigate('/authentication/login');
-      return;
-    }
-    
-    // 5. Prepare request
+
     const headers = {
-      'Authorization': `Bearer ${token.trim()}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
     };
-    
-    const requestUrl = `${API_BASE_URL}/admindashboard/summary`;
-    console.log('📤 Request details:', {
-      url: requestUrl,
-      method: 'GET',
-      headers: headers
+
+    // Fetch all dashboard data in parallel
+    const [
+      summaryResponse,
+      projectsHealthResponse, // Project health endpoint
+      financialResponse,
+      clientDataResponse
+    ] = await Promise.all([
+      fetch(`${API_BASE_URL}/admindashboard/summary`, { headers }),
+      fetch(`${API_BASE_URL}/admindashboard/projects/health`, { headers }),
+      fetch(`${API_BASE_URL}/admindashboard/financial`, { headers }),
+      fetch(`${API_BASE_URL}/admindashboard/clients-only`, { headers })
+    ]);
+
+    // Process all responses
+    const summaryData = await summaryResponse.json();
+    const projectsHealthData = await projectsHealthResponse.json();
+    const financialData = await financialResponse.json();
+    const clientData = await clientDataResponse.json();
+
+    // Update state with all data
+    setDashboardData({
+      // Summary from summary endpoint
+      summary: {
+        totalClients: summaryData.data?.totalClients || 0,
+        activeProjects: summaryData.data?.activeProjects || 0,
+        delayedProjects: summaryData.data?.delayedProjects || 0,
+        pendingInvoices: summaryData.data?.pendingInvoices || 0,
+        totalRevenue: summaryData.data?.totalRevenue || 0,
+        pendingRevenue: summaryData.data?.pendingRevenue || 0,
+        paidRevenue: summaryData.data?.paidRevenue || 0,
+        totalTasks: summaryData.data?.totalTasks || 0,
+        overdueTasks: summaryData.data?.overdueTasks || 0
+      },
+      
+      // Project health data for chart
+      projects: projectsHealthData.success ? projectsHealthData.data.projects : [],
+      
+      // Financial data
+      financial: financialData.success ? financialData.data : {
+        totalInvoices: 0,
+        totalAmount: 0,
+        paidAmount: 0,
+        pendingAmount: 0,
+        overdueAmount: 0,
+        recentInvoices: []
+      },
+      
+      // Client data
+      clientData: clientData.success ? clientData.data : null
     });
-    
-    // 6. Make API call with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
-    const response = await fetch(requestUrl, {
-      method: 'GET',
-      headers,
-      mode: 'cors',
-      credentials: 'include',
-      signal: controller.signal
-    }).finally(() => clearTimeout(timeoutId));
-    
-    console.log('📥 Response received:', {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-    
-    // 7. Handle non-success responses
-    if (!response.ok) {
-      let errorMessage = `Server error: ${response.status} ${response.statusText}`;
-      
-      try {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-          console.error('❌ Backend JSON error:', errorData);
-        } else {
-          const errorText = await response.text();
-          console.error('❌ Backend non-JSON error:', errorText.substring(0, 200));
-          
-          if (errorText.includes('Unauthorized') || errorText.includes('401')) {
-            errorMessage = 'Session expired. Please login again.';
-          } else if (errorText.includes('Forbidden') || errorText.includes('403')) {
-            errorMessage = 'Access denied. Admin privileges required.';
-          }
-        }
-      } catch (parseError) {
-        console.error('❌ Error parsing error response:', parseError);
-      }
-      
-      // Handle specific status codes
-      if (response.status === 401) {
-        console.log('🔐 Unauthorized - clearing local storage');
-        setError('Session expired. Redirecting to login...');
-        setTimeout(() => {
-          localStorage.clear();
-          navigate('/authentication/login');
-        }, 2000);
-        return;
-      }
-      
-      if (response.status === 403) {
-        setError('Access denied. Admin privileges required.');
-        return;
-      }
-      
-      setError(errorMessage);
-      return;
-    }
-    
-    // 8. Parse successful response
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.error('❌ Expected JSON but got:', contentType, text.substring(0, 200));
-      setError('Invalid response format from server');
-      return;
-    }
-    
-    const data = await response.json();
-    console.log('✅ API Response:', {
-      success: data.success,
-      statusCode: data.statusCode,
-      message: data.message,
-      dataKeys: data.data ? Object.keys(data.data) : 'No data'
-    });
-    
-    // 9. Validate response structure
-    if (!data || typeof data !== 'object') {
-      console.error('❌ Invalid response structure:', data);
-      setError('Invalid response from server');
-      return;
-    }
-    
-    if (!data.success) {
-      console.error('❌ API returned non-success:', data);
-      setError(data.message || 'Failed to load dashboard data');
-      return;
-    }
-    
-    if (!data.data || typeof data.data !== 'object') {
-      console.error('❌ No data in response:', data);
-      setError('No data received from server');
-      return;
-    }
-    
-    // 10. Update state with dashboard data
-    const dashboardStats = {
-      totalClients: Number(data.data.totalClients) || 0,
-      activeProjects: Number(data.data.activeProjects) || 0,
-      delayedProjects: Number(data.data.delayedProjects) || 0,
-      pendingInvoices: Number(data.data.pendingInvoices) || 0,
-      totalRevenue: Number(data.data.totalRevenue) || 0,
-      pendingRevenue: Number(data.data.pendingRevenue) || 0,
-      paidRevenue: Number(data.data.paidRevenue) || 0,
-      totalTasks: Number(data.data.totalTasks) || 0,
-      overdueTasks: Number(data.data.overdueTasks) || 0,
-      projectsWithHealth: Array.isArray(data.data.projectsWithHealth) 
-        ? data.data.projectsWithHealth 
-        : []
-    };
-    
-    console.log('📊 Dashboard stats to set:', dashboardStats);
-    
-    setDashboardData(prev => ({
-      ...prev,
-      summary: dashboardStats
-    }));
-    
-    setSuccess(data.message || 'Dashboard data loaded successfully!');
-    setTimeout(() => setSuccess(''), 3000);
-    
+
   } catch (error) {
-    console.error('❌ fetchDashboardData error:', error);
-    
-    if (error.name === 'AbortError') {
-      setError('Request timeout. Please try again.');
-    } else if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-      setError('Network error. Please check your connection.');
-    } else {
-      setError(`Error: ${error.message}`);
-    }
-    
+    console.error('Error fetching dashboard data:', error);
+    setError('Failed to load dashboard data. Please try again.');
   } finally {
     setLoading(false);
   }
 };
+
 useEffect(() => {
   const testRefreshEndpoint = async () => {
     try {
