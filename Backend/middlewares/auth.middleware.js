@@ -19,11 +19,9 @@ export const verifyJWT = asynchandler(async (req, res, next) => {
   }
 
   try {
-    // USE THE CORRECT SECRET
-    const CORRECT_SECRET = "dev_access_secret_12345";
-    console.log('🔐 Verifying with CORRECT secret:', CORRECT_SECRET);
     
-    const decoded = jwt.verify(token, CORRECT_SECRET);
+    
+     const decoded = jwt.verify(token, "dev_access_secret_12345");
     console.log("✅ Token verified successfully!");
     
     const user = await User.findById(decoded._id).select("-password -refreshToken");
