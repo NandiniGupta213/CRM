@@ -69,13 +69,13 @@ const userSchema = new Schema(
 );
 
 // Pre-save middleware
-userSchema.pre("save", async function(next) {
+userSchema.pre("save", async function() {
   // Only hash password if modified
   if (this.isModified("password")) {
     try {
       this.password = await bcrypt.hash(this.password, 10);
     } catch (error) {
-      return next(error);
+      throw error; // Throw error instead of using next()
     }
   }
   
@@ -89,8 +89,6 @@ userSchema.pre("save", async function(next) {
     };
     this.roleName = roleNames[this.role] || "Employee";
   }
-  
-  next();
 });
 
 // Password comparison method

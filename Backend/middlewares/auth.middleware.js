@@ -3,11 +3,10 @@ import { asynchandler } from "../utils/asynchHandler.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
 
-
 export const verifyJWT = asynchandler(async (req, res, next) => {
   let token;
 
-  // Get token from Authorization header
+  // ✅ JWT ONLY — from Authorization header
   if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.split(" ")[1];
   }

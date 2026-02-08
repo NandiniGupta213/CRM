@@ -6,6 +6,7 @@ import { sendPasswordResetEmail } from "../utils/nodemailer.js";
 import jwt from "jsonwebtoken";
 import * as crypto from "crypto";
 
+
 // Signup with role
 const signupUser = asynchandler(async (req, res) => { 
   const { username, email, password, confirmPassword, role = 3 } = req.body;
@@ -363,12 +364,13 @@ const changePassword = asynchandler(async (req, res) => {
 
 // Refresh access token
 const refreshAccessToken = asynchandler(async (req, res) => {
-  const incomingRefreshToken = req.body.refreshToken; // ONLY from body
+  const incomingRefreshToken = req.body.refreshToken;
+  console.log(incomingRefreshToken)
 
   if (!incomingRefreshToken) {
     throw new ApiError(401, "Refresh token is required in request body");
   }
-
+console.log('Using secret:', process.env.REFRESH_TOKEN_SECRET);
   try {
     const decoded = jwt.verify(
       incomingRefreshToken,
@@ -389,9 +391,6 @@ const refreshAccessToken = asynchandler(async (req, res) => {
     const newAccessToken = user.generateAuthToken();
     const newRefreshToken = user.generateRefreshToken();
 
-    // Update refresh token in database
-    user.refreshToken = newRefreshToken;
-    await user.save({ validateBeforeSave: false });
 
     // Return tokens in response body (NO cookies)
     return res
