@@ -15,7 +15,7 @@ import { useEffect } from 'react';
 // Lazy-loaded components - REMOVED DashboardRouter
 const App = lazy(() => import('../App'));
 const Dashboard = lazy(() => import('../pages/dashboard/index')); // Admin Dashboard
-const ProjectManagerDashboard = lazy(() => import('../pages/dashboard/projectmanager'));
+const ProjectManagerDashboard = lazy(() => import('../components/sections/projectmanager/index'));
 const ClientDashboard = lazy(() => import('../pages/dashboard/client'));
 const EmployeeDashboard = lazy(() => import('../pages/dashboard/employee'));
 const Login = lazy(() => import('../pages/authentication/Login'));
